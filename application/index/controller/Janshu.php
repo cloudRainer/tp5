@@ -14,12 +14,19 @@ use tool\Logger;
 use tool\Http;
 
 class Janshu{
+    public static $deep=6;
+    public function __construct(){
+        $file = ROOT_PATH.'public/data/cook1.txt';
+        if(!file_exists($file)){
+            touch($file);
+        }
+        Http::set_cookie_file($file);
+        Http::set_cookie_jar($file);
+    }
+
     public function getuserinfo($uid,$deep=1){
         $userinfo = Db::name('js_users')->where(array('uid'=>$uid))->find();
         if(!$userinfo || $userinfo['status'] == 0){
-            $file = ROOT_PATH.'public/data/cook1.txt';
-            Http::set_cookie_file($file);
-            Http::set_cookie_jar($file);
             $html = QueryList::html(Http::get('https://www.jianshu.com/u/'.$uid));
             $rule = [
                 'followings'=>['.info > ul > li:nth-child(1) p','text'],
@@ -53,22 +60,36 @@ class Janshu{
                 }
             }
             $html->destruct();
-
+            if($total = intval($data['followers'])){
+               for($i=1;$i<=intval($total/10)+1;$i++){
+                   $this->getuserlist($uid,'followers',$i);
+               }
+            }
+            if($total = intval($data['following'])){
+                for($i=1;$i<=intval($total/10)+1;$i++){
+                    $this->getuserlist($uid,'followers',$i);
+                }
+            }
         }
     }
-    public function getuserlist($uid,$type='followers'){
-
+    public function getuserlist($uid,$type='followers',$page=1){
+        $html = QueryList::html(Http::get('https://www.jianshu.com/users/'.$uid.'/'.$type.'?page='.$page));
+        $res = $html->find('#list-container   a.avatar')->attrs('href')->all();
+        foreach ($res as $item){
+            $uid = explode('/',$item)[2];
+            if(Db::name('js_users')->where(array('uid'=>$uid))->find()){
+                continue;
+            }else{
+                $data = array(
+                    'uid'=>  $uid,
+                    'time'=>time()
+                );
+                Db::name('js_users')->insert($data);
+            }
+        }
     }
 
     public function test(){
-        /*$this->getuserinfo('ffc565d738a3');
-        return 'dddddddd';*/
-        $file = ROOT_PATH.'public/data/cook1.txt';
-        if(!file_exists($file)){
-            touch($file);
-        }
-        Http::set_cookie_file($file);
-        Http::set_cookie_jar($file);
         $html = QueryList::html(Http::get('https://www.jianshu.com/users/24ddd38310e4/followers?page=1'));
         $res = $html->find('#list-container   a.avatar')->attrs('href')->all();
         foreach ($res as $item){
